@@ -2,7 +2,6 @@
 
 // App icons carry their own margin, so Dia's is drawn larger than the tile to look the same size.
 static NSView *DPPartIcon(NSString *part) {
-    if ([part isEqual:DPTweaks]) return DPIconTileOfSize(@"wand.and.stars", NSColor.systemPurpleColor, 30);
     NSImageView *icon = [NSImageView imageViewWithImage:[NSWorkspace.sharedWorkspace iconForFile:NSBundle.mainBundle.bundlePath]];
     [icon.widthAnchor constraintEqualToConstant:36].active = YES;
     [icon.heightAnchor constraintEqualToConstant:36].active = YES;
@@ -36,7 +35,7 @@ static NSButton *DPButton(NSString *title, id target, SEL action, NSString *part
     _details = [NSMapTable strongToStrongObjectsMapTable];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(sync) name:DPUpdatesDidChangeNotification object:nil];
     DPUpdates *updates = DPUpdates.shared;
-    if (!updates.checking && ![updates downloading:DPDia] && ![updates downloading:DPTweaks]) [updates check:nil];
+    if (!updates.checking && ![updates downloading:DPDia]) [updates check:nil];
     [self sync];
     return self;
 }
@@ -44,7 +43,7 @@ static NSButton *DPButton(NSString *title, id target, SEL action, NSString *part
 - (NSArray<NSString *> *)shown {
     DPUpdates *updates = DPUpdates.shared;
     NSMutableArray *parts = [NSMutableArray new];
-    for (NSString *part in @[DPDia, DPTweaks])
+    for (NSString *part in @[DPDia])
         if ([updates available:part] || [updates staged:part] || [updates downloading:part]) [parts addObject:part];
     return parts;
 }
@@ -60,7 +59,7 @@ static NSButton *DPButton(NSString *title, id target, SEL action, NSString *part
     NSMutableString *shape = [NSMutableString stringWithFormat:@"%d %d", updates.checking, updates.found != nil];
     for (NSString *part in self.shown)
         [shape appendFormat:@" %@:%@:%@:%d", part, [self stateOf:part], updates.found[part][@"latest"], [updates failed:part]];
-    for (NSString *part in @[DPDia, DPTweaks]) [shape appendFormat:@"%ld", DPAutoLevelOf(part)];
+    for (NSString *part in @[DPDia]) [shape appendFormat:@"%ld", DPAutoLevelOf(part)];
     if (![shape isEqual:_shape]) {
         _shape = shape;
         [self rebuild];
@@ -98,11 +97,6 @@ static NSButton *DPButton(NSString *title, id target, SEL action, NSString *part
                                          [NSButton buttonWithTitle:@"Check Now" target:self action:@selector(checkAgain:)])])];
     }
 
-    if (shown.count > 1) {
-        NSButton *both = [NSButton buttonWithTitle:@"Update Both" target:self action:@selector(updateAll:)];
-        both.enabled = ![updates downloading:DPDia] && ![updates downloading:DPTweaks];
-        [views addObject:DPGroup(@[DPRow(DPLine(@"Dia and DiaTweaks both have updates", 13, NSColor.labelColor), both)])];
-    }
     for (NSString *part in shown) {
         if (part != shown.firstObject) [views addObject:DPHeader(@"Also Available")];
         [views addObject:[self groupFor:part]];
@@ -110,16 +104,15 @@ static NSButton *DPButton(NSString *title, id target, SEL action, NSString *part
 
     if (updates.found) {
         NSMutableArray<NSView *> *installed = [NSMutableArray new];
-        for (NSString *part in @[DPDia, DPTweaks]) {
-            id version = updates.found[part][@"installed"];
-            NSString *text = [version isKindOfClass:NSString.class] ? version : [part isEqual:DPDia] ? @"—" : @"Development build";
-            [installed addObject:DPRow(DPLine(DPPartName(part), 13, NSColor.labelColor), DPLine(text, 13, NSColor.secondaryLabelColor))];
-        }
+        id version = updates.found[DPDia][@"installed"];
+        NSString *text = [version isKindOfClass:NSString.class] ? version : @"—";
+        [installed addObject:DPRow(DPLine(@"Dia", 13, NSColor.labelColor), DPLine(text, 13, NSColor.secondaryLabelColor))];
+        [installed addObject:DPRow(DPLine(@"DiaTweaks", 13, NSColor.labelColor), DPLine(@"Built from source", 13, NSColor.secondaryLabelColor))];
         [views addObjectsFromArray:@[DPHeader(@"Installed"), DPGroup(installed)]];
     }
 
     NSMutableArray<NSView *> *automatic = [NSMutableArray new];
-    for (NSString *part in @[DPDia, DPTweaks]) {
+    for (NSString *part in @[DPDia]) {
         NSPopUpButton *menu = [NSPopUpButton new];
         [menu addItemsWithTitles:@[@"Off", @"Show in Software Update", @"Download", @"Download and install on quit"]];
         [menu selectItemAtIndex:DPAutoLevelOf(part)];
@@ -186,17 +179,6 @@ static NSButton *DPButton(NSString *title, id target, SEL action, NSString *part
     [DPUpdates.shared download:part then:^{
         if ([DPUpdates.shared staged:part]) [DPUpdates.shared installAndRelaunch:@[part]];
     }];
-}
-
-- (void)updateAll:(id)sender {
-    DPUpdates *updates = DPUpdates.shared;
-    NSArray<NSString *> *parts = self.shown;
-    __block NSUInteger left = parts.count;
-    void (^ready)(void) = ^{ if (--left == 0) [updates installAndRelaunch:parts]; };
-    for (NSString *part in parts) {
-        if ([updates staged:part]) ready();
-        else [updates download:part then:ready];
-    }
 }
 
 - (void)automaticChanged:(NSPopUpButton *)sender {

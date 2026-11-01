@@ -1,11 +1,11 @@
-// Updates go through the diapatch CLI: `check` finds them, `update` and `self-update` stage them, `apply` installs them.
+// Dia updates go through the diapatch CLI: `check` finds them, `update` stages them, `apply` installs them.
 #import "StdPatch/StdPatch.h"
 
 void DPInstallUpdates(void);
 void DPRunCLI(NSArray<NSString *> *args, void (^completion)(NSString *output));
 void DPHandOffAndQuit(NSArray<NSString *> *args);  // Quits Dia while the CLI runs `args`, then relaunches it.
 
-extern NSString *const DPDia, *const DPTweaks;
+extern NSString *const DPDia;
 NSString *DPPartName(NSString *part);
 
 // Each level also does everything the ones before it do.

@@ -1,5 +1,7 @@
 # DiaTweaks
 
+> Personal fork of [JaceThings/DiaTweaks](https://github.com/JaceThings/DiaTweaks), which has no licence, so all rights in its code remain with its authors. This fork removes pre-built DiaTweaks updates.
+
 Small tweaks for [Dia](https://www.diabrowser.com) that stay in place when Dia updates.
 
 Unofficial and not affiliated with The Browser Company. Apple Silicon, macOS 14 or later.
@@ -34,7 +36,6 @@ Run `diatweaks` on its own for a menu, or:
 | `diatweaks enable hideToolbar` | Turns a tweak on; Dia changes straight away |
 | `diatweaks disable hideToolbar` | Turns a tweak off |
 | `diatweaks status` | Shows Dia's version, safe mode and which tweaks are on |
-| `diatweaks update` | Installs the latest DiaTweaks release and patches Dia again |
 | `diatweaks update-dia` | Downloads a newer Dia and patches it |
 | `diatweaks restore` | Puts the original Dia back |
 
@@ -42,21 +43,14 @@ Tweak names work as keys or titles, like `hideToolbar` or `"Hide toolbar"`. Add 
 
 ## Updating
 
-Dia's own updater is switched off. **Settings → Patches → Software Update** checks for a new Dia and a new DiaTweaks release, downloads either one, and relaunches Dia to install it, like macOS's Software Update. Under **Automatic Updates**, pick for each of Dia and DiaTweaks: off, just show updates, download them, or download and install them when you quit (the default).
+Dia's own updater is switched off. **Settings → Patches → Software Update** checks for a new Dia, verifies The Browser Company's signature, patches it and installs it when you quit (the default). To update now, use that page or `diatweaks update-dia`.
 
-- **Dia now:** `diatweaks update-dia`
-- **DiaTweaks now:** `diatweaks update`
-
-<details>
-<summary>Installed before <code>diatweaks</code> existed?</summary>
-
-Update once by hand, then use `diatweaks update` from then on:
+This version never downloads pre-built DiaTweaks releases. To update DiaTweaks, build it from source:
 
 ```sh
-rm -rf /tmp/DiaTweaks && git clone --depth 1 https://github.com/JaceThings/DiaTweaks.git /tmp/DiaTweaks && /tmp/DiaTweaks/install.sh
+git -C ~/DiaTweaks pull && ~/DiaTweaks/install.sh
 ```
 
-</details>
 
 ## FAQ
 

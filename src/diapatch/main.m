@@ -1,7 +1,6 @@
 // Keeps a patched copy of the user's own Dia in place across updates. The official app stays untouched in
 // <support>/pristine; re-signing drops entitlements tied to The Browser Company's profile, or AMFI refuses to launch.
 
-#import <CommonCrypto/CommonDigest.h>
 #import <Foundation/Foundation.h>
 #include <libproc.h>
 #include <mach-o/loader.h>
@@ -13,8 +12,6 @@
 static NSString *const kFeed = @"https://releases.diabrowser.com/BoostBrowser-updates.xml";
 static NSString *const kSparkle = @"http://www.andymatuschak.org/xml-namespaces/sparkle";
 static NSString *const kLocalIdentity = @"DiaPatches Local Signing";
-static NSString *const kReleases = @"https://api.github.com/repos/JaceThings/DiaTweaks/releases/latest";
-static NSString *const kReleaseAsset = @"DiaTweaks.zip";
 static NSString *const kDiaReleaseNotes = @"https://www.diabrowser.com/release-notes/latest";
 
 static NSString *gHome, *gApp, *gCache, *gPristine, *gStaged, *gReady;
@@ -311,7 +308,8 @@ static BOOL build(NSString *source) {
     BOOL ok = removeTree(work) && makeDir(gStaged.stringByDeletingLastPathComponent) && clone(source, work)
         && addLoadCommand([contents stringByAppendingPathComponent:[@"MacOS" stringByAppendingPathComponent:executable]], dylib)
         && configureInfo(work) && removeTree([contents stringByAppendingPathComponent:@"embedded.provisionprofile"])
-        && sign(work) && moveBundle(work, gStaged)
+        // Dia quarantines files made by what it launches, and writing Info.plist and signing make new ones.
+        && sign(work) && check(@[ @"/usr/bin/xattr", @"-cr", work ]) && moveBundle(work, gStaged)
         && ([stagedID() writeToFile:gReady atomically:YES encoding:NSUTF8StringEncoding error:NULL] || fail(@"cannot write %@", gReady));
     if (!ok) removeTree(work);
     return ok;
@@ -386,89 +384,6 @@ static Release *latest(int seconds, NSString **channel, NSString **problem) {
     return release;
 }
 
-// A DiaTweaks release is identified by its asset's digest, so replacing the asset on a published release counts as an update.
-static NSString *gStagedTweaks;
-
-static NSDictionary *installedRelease(void) { return [NSDictionary dictionaryWithContentsOfFile:inHome(@"release.plist")]; }
-static NSDictionary *stagedRelease(void) {
-    return [NSDictionary dictionaryWithContentsOfFile:[gStagedTweaks stringByAppendingPathComponent:@"release.plist"]];
-}
-
-static NSDictionary<NSString *, NSString *> *tweaksTargets(void) {
-    return @{ @"diapatch" : inHome(@"bin/diapatch"), @"diatweaks" : inHome(@"bin/diatweaks"), @DYLIB : inHome(@DYLIB),
-              @"patches.json" : inHome(@"patches.json") };
-}
-
-static NSString *sha256(NSString *file) {
-    NSData *data = [NSData dataWithContentsOfFile:file options:NSDataReadingMappedIfSafe error:NULL];
-    if (!data) return nil;
-    unsigned char digest[CC_SHA256_DIGEST_LENGTH];
-    CC_SHA256(data.bytes, (CC_LONG)data.length, digest);
-    NSMutableString *hex = [NSMutableString string];
-    for (int i = 0; i < CC_SHA256_DIGEST_LENGTH; i++) [hex appendFormat:@"%02x", digest[i]];
-    return [@"sha256:" stringByAppendingString:hex];
-}
-
-static NSDictionary *latestTweaks(int seconds, NSString **problem) {
-    NSString *url = env("DIAPATCH_RELEASES") ?: kReleases, *output;
-    if (fetch(url, seconds, nil, &output) != 0) {
-        *problem = [NSString stringWithFormat:@"cannot reach %@: %@", url,
-                                              [output stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet]];
-        return nil;
-    }
-    NSDictionary *release = [NSJSONSerialization JSONObjectWithData:[output dataUsingEncoding:NSUTF8StringEncoding] options:0 error:NULL];
-    NSDictionary *asset;
-    for (NSDictionary *candidate in [release isKindOfClass:NSDictionary.class] ? release[@"assets"] : nil)
-        if ([candidate[@"name"] isEqual:kReleaseAsset]) asset = candidate;
-    NSString *digest = asset[@"digest"];
-    if (![digest isKindOfClass:NSString.class] || ![digest hasPrefix:@"sha256:"] || ![release[@"tag_name"] isKindOfClass:NSString.class]) {
-        *problem = [NSString stringWithFormat:@"no %@ in the latest DiaTweaks release", kReleaseAsset];
-        return nil;
-    }
-    return @{ @"tag" : release[@"tag_name"], @"digest" : digest, @"size" : asset[@"size"] ?: @0,
-              @"releaseNotes" : release[@"html_url"] ?: @"", @"url" : asset[@"browser_download_url"] };
-}
-
-static BOOL tweaksAvailable(NSDictionary *latest) {
-    return latest && ![installedRelease()[@"digest"] isEqual:latest[@"digest"]] && ![stagedRelease()[@"digest"] isEqual:latest[@"digest"]];
-}
-
-static BOOL stageTweaks(void) {
-    NSString *problem, *output;
-    NSDictionary *latest = latestTweaks(30, &problem);
-    if (!latest) return fail(@"%@", problem);
-    if ([stagedRelease()[@"digest"] isEqual:latest[@"digest"]]) return say(@"DiaTweaks %@ is ready to install", latest[@"tag"]);
-    if (!tweaksAvailable(latest)) return say(@"DiaTweaks %@ is up to date", latest[@"tag"]);
-
-    NSString *work = [gCache stringByAppendingPathComponent:@"release"], *zip = [work stringByAppendingPathComponent:kReleaseAsset];
-    NSString *building = [gStagedTweaks stringByAppendingString:@".building"];
-    if (!removeTree(work) || !makeDir(work)) return NO;
-    note(@"downloading DiaTweaks %@ from %@", latest[@"tag"], latest[@"url"]);
-    if (fetch(latest[@"url"], 600, zip, &output) != 0) {
-        removeTree(work);
-        return fail(@"cannot download DiaTweaks %@: %@", latest[@"tag"], output);
-    }
-    BOOL ok = ([sha256(zip) isEqual:latest[@"digest"]] || fail(@"the DiaTweaks %@ download doesn't match its digest", latest[@"tag"]))
-        && removeTree(building) && makeDir(building) && check(@[ @"/usr/bin/ditto", @"-x", @"-k", zip, building ]);
-    for (NSString *name in tweaksTargets())
-        ok = ok && (exists([building stringByAppendingPathComponent:name]) || fail(@"DiaTweaks %@ has no %@", latest[@"tag"], name));
-    ok = ok && [@{ @"digest" : latest[@"digest"], @"tag" : latest[@"tag"] } writeToFile:[building stringByAppendingPathComponent:@"release.plist"] atomically:YES]
-        && removeTree(gStagedTweaks) && moveBundle(building, gStagedTweaks);
-    removeTree(work);
-    removeTree(building);
-    return ok && say(@"DiaTweaks %@ is ready to install", latest[@"tag"]);
-}
-
-static BOOL applyTweaks(void) {
-    NSString *tag = stagedRelease()[@"tag"];
-    if (!tag) return removeTree(gStagedTweaks);
-    NSDictionary<NSString *, NSString *> *targets = tweaksTargets();
-    BOOL ok = makeDir(inHome(@"bin"));
-    for (NSString *name in targets) ok = ok && moveBundle([gStagedTweaks stringByAppendingPathComponent:name], targets[name]);
-    ok = ok && moveBundle([gStagedTweaks stringByAppendingPathComponent:@"release.plist"], inHome(@"release.plist"));
-    return ok && removeTree(gStagedTweaks) && say(@"installed DiaTweaks %@", tag);
-}
-
 #pragma mark - Commands
 
 static BOOL apply(void) {
@@ -476,11 +391,6 @@ static BOOL apply(void) {
     if (!stagedReady()) return unstage() && fail(@"deleted %@: a stopped run left it there; run `diapatch build` to stage Dia again", gStaged);
     if (appRunning()) return fail(@"Dia is running; quit it, then run `diapatch apply`");
     return moveBundle(gStaged, gApp) && removeTree(gReady) && say(@"installed patched Dia %@ at %@", versionOf(gApp), gApp);
-}
-
-static BOOL applyChosen(BOOL dia, BOOL tweaks) {
-    if (!dia && !tweaks) dia = tweaks = YES;
-    return (!tweaks || applyTweaks()) && (!dia || apply());
 }
 
 static BOOL install(BOOL relaunch) {
@@ -572,7 +482,6 @@ static BOOL status(BOOL json) {
         @"staged" : (stagedReady() ? versionOf(gStaged) : nil) ?: NSNull.null,
         @"feed" : release.version ?: NSNull.null,
         @"channel" : channel ?: @"stable",
-        @"release" : installedRelease()[@"tag"] ?: NSNull.null,
     };
     if (json) {
         NSData *data = [NSJSONSerialization dataWithJSONObject:status
@@ -581,7 +490,7 @@ static BOOL status(BOOL json) {
         printf("%.*s\n", (int)data.length, (const char *)data.bytes);
         return YES;
     }
-    for (NSString *key in @[ @"official", @"installed", @"patched", @"staged", @"feed", @"channel", @"release" ]) {
+    for (NSString *key in @[ @"official", @"installed", @"patched", @"staged", @"feed", @"channel" ]) {
         id value = status[key];
         if (value == NSNull.null) value = [key isEqualToString:@"feed"] ? problem : @"none";
         else if ([key isEqualToString:@"patched"]) value = [value boolValue] ? @"yes" : @"no";
@@ -592,9 +501,8 @@ static BOOL status(BOOL json) {
 
 // Like status, it runs without taking the lock.
 static BOOL checkUpdates(void) {
-    NSString *channel, *problem, *tweaksProblem;
+    NSString *channel, *problem;
     Release *dia = latest(15, &channel, &problem);
-    NSDictionary *tweaks = latestTweaks(15, &tweaksProblem);
     BOOL diaStaged = stagedReady() && [buildOf(gStaged) isEqual:dia.build];
     NSDictionary *result = @{
         @"dia" : @{
@@ -605,15 +513,6 @@ static BOOL checkUpdates(void) {
             @"staged" : (stagedReady() ? versionOf(gStaged) : nil) ?: NSNull.null,
             @"available" : @((BOOL)(dia && newer(dia.build, buildOf(gPristine)) && !diaStaged)),
             @"error" : dia ? NSNull.null : problem,
-        },
-        @"tweaks" : @{
-            @"installed" : installedRelease()[@"tag"] ?: NSNull.null,
-            @"latest" : tweaks[@"tag"] ?: NSNull.null,
-            @"size" : tweaks[@"size"] ?: @0,
-            @"releaseNotes" : tweaks[@"releaseNotes"] ?: NSNull.null,
-            @"staged" : stagedRelease()[@"tag"] ?: NSNull.null,
-            @"available" : @((BOOL)tweaksAvailable(tweaks)),
-            @"error" : tweaks ? NSNull.null : tweaksProblem,
         },
     };
     NSData *data = [NSJSONSerialization dataWithJSONObject:result options:NSJSONWritingSortedKeys | NSJSONWritingWithoutEscapingSlashes error:NULL];
@@ -628,15 +527,15 @@ static const char kUsage[] =
     "                   --relaunch quits a running Dia first and reopens it afterwards\n"
     "  build            rebuild the staged patched Dia from the pristine copy\n"
     "  update           download, verify and stage a newer Dia from your channel (stable or Early Birds)\n"
-    "  self-update      download, verify and stage the latest DiaTweaks release if it isn't the one installed\n"
-    "  apply [--wait PID] [--relaunch] [--dia] [--tweaks]\n"
-    "                   install what's staged once PID and Dia have quit, then reopen Dia; --dia or --tweaks limits it\n"
-    "  check --json     what's installed, available and staged for Dia and DiaTweaks\n"
+    "  self-update      removed: DiaTweaks updates come from source (git pull, then install.sh)\n"
+    "  apply [--wait PID] [--relaunch] [--dia]\n"
+    "                   install the staged Dia once PID and Dia have quit, then reopen Dia\n"
+    "  check --json     what's installed, available and staged for Dia\n"
     "  uninstall [--wait PID] [--relaunch] [--purge]\n"
     "                   put the official Dia back; --purge also deletes DiaPatches' files and the diatweaks command\n"
     "  status [--json]  official, installed, staged and offered versions, and the update channel\n"
     "environment: DIAPATCH_IDENTITY (codesigning identity, remembered by install), DIAPATCH_HOME,\n"
-    "  DIAPATCH_APP, DIAPATCH_CACHE, DIAPATCH_FEED, DIAPATCH_RELEASES, DIATWEAKS_LINK_DIR, DIAPATCH_NO_RELAUNCH (ignore --relaunch)\n";
+    "  DIAPATCH_APP, DIAPATCH_CACHE, DIAPATCH_FEED, DIATWEAKS_LINK_DIR, DIAPATCH_NO_RELAUNCH (ignore --relaunch)\n";
 
 int main(int argc, const char *argv[]) {
     @autoreleasepool {
@@ -647,12 +546,11 @@ int main(int argc, const char *argv[]) {
         gPristine = inHome(@"pristine/Dia.app");
         gStaged = inHome(@"staged/Dia.app");
         gReady = inHome(@"staged/ready");
-        gStagedTweaks = inHome(@"staged/DiaTweaks");
 
         NSString *command = argc > 1 ? @(argv[1]) : @"";
         NSArray<NSString *> *allowed = @{
             @"install" : @[ @"--relaunch" ], @"build" : @[], @"update" : @[], @"self-update" : @[], @"status" : @[ @"--json" ],
-            @"apply" : @[ @"--wait", @"--relaunch", @"--dia", @"--tweaks" ], @"check" : @[ @"--json" ], @"uninstall" : @[ @"--wait", @"--relaunch", @"--purge" ],
+            @"apply" : @[ @"--wait", @"--relaunch", @"--dia" ], @"check" : @[ @"--json" ], @"uninstall" : @[ @"--wait", @"--relaunch", @"--purge" ],
         }[command];
         NSMutableSet<NSString *> *flags = [NSMutableSet set];
         pid_t pid = 0;
@@ -686,8 +584,8 @@ int main(int argc, const char *argv[]) {
         BOOL ok = [command isEqualToString:@"install"] ? install([flags containsObject:@"--relaunch"])
             : [command isEqualToString:@"build"]       ? build(gPristine) && say(@"staged patched Dia %@", versionOf(gStaged))
             : [command isEqualToString:@"update"]      ? update()
-            : [command isEqualToString:@"self-update"] ? stageTweaks()
-            : [command isEqualToString:@"apply"]       ? applyChosen([flags containsObject:@"--dia"], [flags containsObject:@"--tweaks"])
+            : [command isEqualToString:@"self-update"] ? fail(@"DiaTweaks updates come from source: run git -C ~/DiaTweaks pull && ~/DiaTweaks/install.sh")
+            : [command isEqualToString:@"apply"]       ? apply()
                                                        : uninstall([flags containsObject:@"--purge"]);
         // open sometimes fails with -600 right after Dia quits itself.
         for (int i = 0; [flags containsObject:@"--relaunch"] && i < 20; i++) {

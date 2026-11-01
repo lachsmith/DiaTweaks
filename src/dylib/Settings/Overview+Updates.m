@@ -33,7 +33,7 @@
 - (void)updatesDidChange {
     DPUpdates *updates = DPUpdates.shared;
     NSUInteger available = 0, staged = 0;
-    for (NSString *part in @[DPDia, DPTweaks]) {
+    for (NSString *part in @[DPDia]) {
         available += [updates available:part];
         staged += [updates staged:part];
     }
