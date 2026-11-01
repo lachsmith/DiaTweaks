@@ -41,19 +41,6 @@ CI fails if a patch has no wiki page or the sidebar doesn't link to it. Run `scr
 
 To try `install.sh`, `diapatch` or `diatweaks` without touching your own Dia, point `DIAPATCH_APP` at a copy of Dia, `DIAPATCH_HOME`, `DIAPATCH_CACHE` and `DIATWEAKS_LINK_DIR` at scratch folders and `DIATWEAKS_DOMAIN` at a settings domain of its own, and set `DIAPATCH_NO_RELAUNCH=1` so nothing quits or opens Dia. `DIAPATCH_RELEASES` points `diapatch self-update` at a release JSON of your own, which can use `file://` links.
 
-## Releasing
-
-1. Tag main and push the tag: `git tag v1.2.0 && git push origin v1.2.0`. Versions are `vMAJOR.MINOR.PATCH`. To open the notes with an announcement, tag with a message instead: `git tag -a v1.2.0 -m "…"`.
-2. The Release workflow builds `DiaTweaks.zip` and opens a draft release with it attached. Its notes are drafted in this order, leaving out empty sections:
-   - 📣 Announcement: the tag's message.
-   - ✨ New tweaks: every patch added since the last tag, with its description and wiki page.
-   - ⚡️ Improvements: every other `feat`.
-   - 🐛 Fixes: every `fix` and `perf`.
-   - 🧪 Tested with Dia `VERSION`: replace it with the Dia you tested on.
-3. Reword the notes as you like, then publish. Settings doesn't show them, only a Release Notes link to the release. Installs see it the next time Dia opens or someone checks.
-
-Installs compare the zip's digest, not the version. To fix a release without a new version, push the fix to main, move the tag (`git tag -f v1.2.0 && git push -f origin v1.2.0`), then run the Release workflow by hand with that tag. It replaces the zip, and everyone gets it as an update, including people who already installed the broken one. Edit the notes on GitHub at any time. Keep immutable releases off in the repo settings, or GitHub won't let the zip change.
-
 ## Commits
 
 - [Conventional Commits](https://www.conventionalcommits.org): `fix(dylib): keep the top padding under horizontal tabs`.

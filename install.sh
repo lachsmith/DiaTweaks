@@ -45,10 +45,6 @@ trap 'interrupted=1' INT TERM
 [ -z "${interrupted-}" ] || exit 130
 trap 'exit 130' INT TERM
 
-# This version only runs what's built here, so nothing from an old pre-built release stays.
-rm -f "$support/release.plist"
-[ -n "$cli" ] || rm -f "$support/bin/diatweaks"
-
 if [ -n "$cli" ]; then
     if [ -n "${DIATWEAKS_LINK_DIR-}" ]; then dir=$DIATWEAKS_LINK_DIR
     elif [ -w /opt/homebrew/bin ]; then dir=/opt/homebrew/bin
