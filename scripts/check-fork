@@ -48,6 +48,12 @@ report=$(git grep -I --untracked -n -o -E 'https?://[A-Za-z0-9._~%:-]+(/[A-Za-z0
         else if (host == "diabrowser.com" || host == "www.diabrowser.com" || host == "releases.diabrowser.com") verdict = "ok"
         else if (url ~ /^github\.com\/JaceThings\/DiaTweaks\/wiki(\/|$)/) verdict = "ok"
         else if (url ~ /^raw\.githubusercontent\.com\/wiki\/JaceThings\/DiaTweaks(\/|$)/) verdict = "ok"
+        # Settings/Home.m: the "GitHub" and "Report a Bug" rows open this repo page (and /issues/new/choose, appended at
+        # runtime) in the browser when clicked. Nothing is fetched or downloaded from it.
+        else if (url == "github.com/JaceThings/DiaTweaks") verdict = "ok (exception: Home.m links)"
+        # Patches/Peek/Pages.m: the Peek search page used when the default search engine of Dia has no usable URL
+        # template. It is only loaded when the user searches from Peek, with that tweak on.
+        else if (url == "www.google.com/search") verdict = "ok (exception: Peek search fallback)"
         key = verdict "\t" (verdict == "FAIL" ? url "  in " file : host)
         if (!(key in seen)) order[++n] = key
         seen[key]++

@@ -13,6 +13,8 @@ This is a personal fork of [JaceThings/DiaTweaks](https://github.com/JaceThings/
    - `github.com/JaceThings/DiaTweaks/wiki`
    - `raw.githubusercontent.com/wiki/JaceThings/DiaTweaks`
 
+   Two exact URLs are allowed as exceptions: `github.com/JaceThings/DiaTweaks`, which Settings → Home's "GitHub" and "Report a Bug" rows open in the browser, and `www.google.com/search`, Peek's fallback search page.
+
    Test fixtures and example URLs (`example.com`, `.test`, `localhost`) are ignored, along with two names that are never fetched: Sparkle's XML namespace and Cargo.lock's registry ID.
 3. **Quarantine is cleared after signing.** `diapatch build` runs `xattr -cr` on the patched Dia after signing it, because files created while Dia is running diapatch get quarantined.
 

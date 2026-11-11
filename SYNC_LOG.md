@@ -13,7 +13,7 @@ No branch is created or renamed to `main`, and nothing is committed to `my-versi
 - [x] 1. Prepare repo, tag, branch, create this log
 - [x] 2. Merge upstream/main and resolve conflicts
 - [x] 3. Compare quarantine handling
-- [x] 4. Write scripts/check-fork and FORK.md (2 host findings await the user)
+- [x] 4. Write scripts/check-fork and FORK.md (2 host exceptions allowed by the user)
 - [x] 5. Confirm defaultOn is NO for Passkeys, ICloudPasswords, OnePassword
 - [x] 6. make, make test (make + make check pass; `make test` deferred until after the approved install, because it quits Dia)
 - [ ] 7. Summary, then install on approval, diapatch status
@@ -21,7 +21,7 @@ No branch is created or renamed to `main`, and nothing is committed to `my-versi
 
 ## Current state / next action
 
-Step 6 done except `make test`, which waits for the install approval (it quits Dia and replaces the installed dylib). Next: step 7. Show the user the summary, ask about the two check-fork host findings (step 4) and for approval to run `./install.sh --yes` then `make test`. install.sh stops at check-fork until the host findings are settled.
+Step 4 follow-up done: check-fork passes. Next: step 7, approved by the user. Run `./install.sh --yes`, then `~/Library/Application Support/DiaPatches/bin/diapatch status`, then `make test`.
 
 ## Step log
 
@@ -136,3 +136,22 @@ Ran:
 - `cargo build` for cli/: not run, because this Mac has no Rust toolchain (no `~/.cargo`), and no `diatweaks` command is installed. install.sh skips the CLI without Rust and doesn't offer rustup with `--yes`. CI (`build.yml`) doesn't build the CLI either. The step 2 CLI change (removing `Command::Update`, `Action::UpdateDiaTweaks`, `mod update`) was reviewed by diff only, and is **not compiled**.
 
 Not run: `make test`. It runs `./test.sh`, which SIGTERMs the running Dia, copies `build/DiaPatches.dylib` over the installed `~/Library/Application Support/DiaPatches/DiaPatches.dylib` and launches Dia in test mode, which needs a patched Dia. That's an install of unreviewed code that quits Dia, so it waits for the step 7 approval and runs after `./install.sh --yes`.
+
+### Step 4 follow-up: host exceptions allowed (2026-11-11)
+
+The user chose to allow both flagged URLs as exact matches, with no app code changed. `scripts/check-fork` now accepts `github.com/JaceThings/DiaTweaks` (Settings/Home.m "GitHub" and "Report a Bug" rows, opened in the browser) and `www.google.com/search` (Peek's fallback search page). Each has a comment saying why. FORK.md lists both exceptions.
+
+Ran `scripts/check-fork`: exit 0.
+
+```
+check-fork: http(s) hosts in src/ and cli/
+    ignored (Cargo registry ID)                    105  github.com
+    ignored (XML namespace name, never fetched)      1  www.andymatuschak.org
+    ok                                               1  github.com
+    ok                                               1  raw.githubusercontent.com
+    ok                                               1  releases.diabrowser.com
+    ok                                               6  www.diabrowser.com
+    ok (exception: Home.m links)                     1  github.com
+    ok (exception: Peek search fallback)             1  www.google.com
+check-fork: ok
+```
