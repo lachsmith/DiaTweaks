@@ -32,4 +32,4 @@ Merge `upstream/main` into a branch off `my-version`. Upstream wins, except for 
 ## History
 
 - f09c7bf, ec01611, 0f3f9bc: removed pre-built DiaTweaks updates and cleared quarantine after signing.
-- 2026-11-11: synced with upstream (see the `sync-upstream` PR).
+- 2026-11-11: synced with upstream in [PR #1](https://github.com/lachsmith/DiaTweaks/pull/1). Step-by-step log, conflict resolutions and test results: [docs/sync-2026-11-11.md](docs/sync-2026-11-11.md).

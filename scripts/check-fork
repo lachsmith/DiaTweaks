@@ -8,7 +8,7 @@ failed=0
 fail() { printf 'check-fork: %s\n' "$*" >&2; failed=1; }
 
 # Files that name the patterns to explain them.
-skip=':!scripts/check-fork :!FORK.md :!SYNC_LOG.md'
+skip=':!scripts/check-fork :!FORK.md :!docs/sync-2026-11-11.md'
 
 # 1. Release code: checking for, downloading, staging or installing pre-built DiaTweaks.
 # shellcheck disable=SC2086
