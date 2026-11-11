@@ -12,7 +12,7 @@ No branch is created or renamed to `main`, and nothing is committed to `my-versi
 
 - [x] 1. Prepare repo, tag, branch, create this log
 - [x] 2. Merge upstream/main and resolve conflicts
-- [ ] 3. Compare quarantine handling
+- [x] 3. Compare quarantine handling
 - [ ] 4. Write scripts/check-fork and FORK.md
 - [ ] 5. Confirm defaultOn is NO for Passkeys, ICloudPasswords, OnePassword
 - [ ] 6. make, make test
@@ -21,7 +21,7 @@ No branch is created or renamed to `main`, and nothing is committed to `my-versi
 
 ## Current state / next action
 
-Step 2 done (merge commit). Not built yet: that's step 6. Next: step 3, compare upstream's quarantine handling with the fork's `xattr -cr` in `build()` of src/diapatch/main.m (both are in place for now).
+Step 3 done. Next: step 4, write `scripts/check-fork` and `FORK.md`, and run check-fork from install.sh before building. Open question for step 4: the upstream repo and issues links in Settings/Home.m.
 
 ## Step log
 
@@ -69,3 +69,17 @@ For the user to look at:
 - `src/dylib/Settings/Home.m` links to `https://github.com/JaceThings/DiaTweaks`, `/issues/new/choose` and `/wiki`. Only `/wiki` is on the step 4 allowed-host list. They're links opened in the browser, not fetches. To be decided in step 4.
 - README's install line still clones upstream (`github.com/JaceThings/DiaTweaks.git`). It's unchanged from before the sync.
 - The Settings page name changed upstream: Software Update is now under **Settings → Home**, not Patches.
+
+### Step 3: done (2026-11-11)
+
+Ran: read-only comparison (`git show 96f7b45`, `git log -S xattr upstream/main`). No code changed in this step.
+
+Upstream's quarantine handling after the merge:
+- `clone()` runs `xattr -cr` on the fresh copy, before patching (d7f9ab4). This cleans the input because `codesign --strict` rejects extended attributes. It doesn't cover files created later in `build()`: the rewritten Info.plist, the icon files from `DPPrepareIcons`, and `_CodeSignature` from signing.
+- `update()` runs `xattr -cr` on the unzipped Dia download before verifying it. This covers the pristine copy, not the patched build.
+- #67 (96f7b45) cleared quarantine on DiaTweaks release downloads (`unquarantine`, removed in step 2) and added `DPLiftQuarantine` in Updates.m, which clears quarantine on the installed `bin/diapatch`, `bin/diatweaks`, dylib and patches.json. It's kept as upstream code: it only clears a flag and downloads nothing.
+- `PasswordsLaunch.m` clears quarantine on its own copy of Dia (passwords tweaks only).
+
+Decision: keep the fork's `xattr -cr work` after `sign(work)` and before `moveBundle` in `build()`, and keep upstream's handling too. The fork's call is the only one that runs on the finished patched bundle. When Dia starts diapatch (Software Update, install on quit), every file `build()` creates after the clone is quarantined. Upstream's calls clean the inputs and are still needed for `codesign --strict`. The two complement each other, so neither replaces the other.
+
+For the user to look at: as f09c7bf said, the post-signing clear still hasn't been proven against a real Dia update started from inside Dia.
