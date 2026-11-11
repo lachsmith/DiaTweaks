@@ -18,7 +18,8 @@ check-fork only catches URLs written literally in the code. It misses a URL that
    Exact URLs allowed as exceptions: in `install.sh`, `sh.rustup.rs` and `rustup.rs` (it offers to install Rust for the `diatweaks` command, only when run interactively and you answer yes). In `scripts/check-tweak-docs`, `github.com/JaceThings/DiaTweaks.wiki.git` (a contributor check that clones the wiki read-only). Also `github.com/JaceThings/DiaTweaks`, which Settings → Home's "GitHub" and "Report a Bug" rows open in the browser, and `www.google.com/search`, Peek's fallback search page.
 
    Test fixtures and example URLs (`example.com`, `.test`, `localhost`) are ignored, along with two names that are never fetched: Sparkle's XML namespace and Cargo.lock's registry ID.
-3. **Quarantine is cleared after signing.** `diapatch build` runs `xattr -cr` on the patched Dia after signing it, because files created while Dia is running diapatch get quarantined.
+3. **No upstream contributor-format checks.** `.github/workflows/pr.yml` and `.github/scripts/check-pr.js` are upstream's checks for outside contributions (PR title, description length, screenshots, commit subjects). They also check every upstream commit, so a sync PR can never pass them. They stay deleted in this fork, and future syncs keep them deleted, like the release scripts.
+4. **Quarantine is cleared after signing.** `diapatch build` runs `xattr -cr` on the patched Dia after signing it, because files created while Dia is running diapatch get quarantined.
 
 ## Updating
 
