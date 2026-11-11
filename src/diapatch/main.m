@@ -599,11 +599,11 @@ static const char kUsage[] =
     "                   --relaunch quits a running Dia first and reopens it afterwards\n"
     "  build            rebuild the staged patched Dia from the pristine copy\n"
     "  update           download, verify and stage a newer Dia from your channel (stable or Early Birds)\n"
-    "  self-update      removed: DiaTweaks updates come from source (git pull, then install.sh)
-    "  apply [--wait PID] [--relaunch] [--dia]
-    "                   install the staged Dia once PID and Dia have quit, then reopen Dia
-    "  check --json     what's installed, available and staged for Dia
-    "  set-icon         use the icon chosen in the App Icon tweak
+    "  self-update      removed: DiaTweaks updates come from source (git pull, then install.sh)\n"
+    "  apply [--wait PID] [--relaunch] [--dia]\n"
+    "                   install the staged Dia once PID and Dia have quit, then reopen Dia\n"
+    "  check --json     what's installed, available and staged for Dia\n"
+    "  set-icon         use the icon chosen in the App Icon tweak\n"
     "  uninstall [--wait PID] [--relaunch] [--purge]\n"
     "                   put the official Dia back; --purge also deletes DiaPatches' files and the diatweaks command\n"
     "  status [--json]  official, installed, staged and offered versions, and the update channel\n"

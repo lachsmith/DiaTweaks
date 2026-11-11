@@ -15,13 +15,13 @@ No branch is created or renamed to `main`, and nothing is committed to `my-versi
 - [x] 3. Compare quarantine handling
 - [x] 4. Write scripts/check-fork and FORK.md (2 host findings await the user)
 - [x] 5. Confirm defaultOn is NO for Passkeys, ICloudPasswords, OnePassword
-- [ ] 6. make, make test
+- [x] 6. make, make test (make + make check pass; `make test` deferred until after the approved install, because it quits Dia)
 - [ ] 7. Summary, then install on approval, diapatch status
 - [ ] 8. Push and open PR into my-version on approval
 
 ## Current state / next action
 
-Step 5 done. Next: step 6, `make` then `make test` on `sync-upstream`. Still open from step 4: the user's decision on the two check-fork host findings (install.sh stops until then).
+Step 6 done except `make test`, which waits for the install approval (it quits Dia and replaces the installed dylib). Next: step 7. Show the user the summary, ask about the two check-fork host findings (step 4) and for approval to run `./install.sh --yes` then `make test`. install.sh stops at check-fork until the host findings are settled.
 
 ## Step log
 
@@ -127,3 +127,12 @@ Where they write when turned on:
 When off: on launch, Passkeys deletes its extension folder and manifest, and iCloud Passwords removes only manifests that point at diapatch (restoring any it moved aside). It also kills any leftover original-Dia helper processes.
 
 For the user to look at: `diapatch install` (run by install.sh) always calls `removeRelay()`. That runs `launchctl bootout gui/<uid>/com.diapatches.passwords` and deletes `~/Library/LaunchAgents/com.diapatches.passwords.plist`, `/Applications/.DiaTweaks` and the relay sockets **if they exist** (left by an older 1Password relay). These paths are outside the plan's allowed set, but only DiaTweaks' own leftovers get deleted.
+
+### Step 6: done, `make test` deferred (2026-11-11)
+
+Ran:
+- `make`: first failed in `src/diapatch/main.m` (usage text). My step 2 rewrite had left five C string literals unterminated (a literal newline where `\n"` belonged). Fixed. That's a merge-resolution error, not upstream code. Now builds `build/diapatch`, `build/DiaPatches.dylib` and `build/patches.json`, exit 0. The one remaining warning is upstream's: a Swift deprecation in `src/dylib/Patches/TidyTabs/Model.swift:11` (`GenerationOptions(sampling:)`, kept on purpose for the macOS 26 SDK per its comment). No upstream tweak code was edited.
+- `make check`: exit 0. Group Tabs, Mouse Back/Forward, Vertical Tab Glow and Sidebar Grain (324 renders) pass, and `scripts/check-patches` reports all 75 tweaks match their sections.
+- `cargo build` for cli/: not run, because this Mac has no Rust toolchain (no `~/.cargo`), and no `diatweaks` command is installed. install.sh skips the CLI without Rust and doesn't offer rustup with `--yes`. CI (`build.yml`) doesn't build the CLI either. The step 2 CLI change (removing `Command::Update`, `Action::UpdateDiaTweaks`, `mod update`) was reviewed by diff only, and is **not compiled**.
+
+Not run: `make test`. It runs `./test.sh`, which SIGTERMs the running Dia, copies `build/DiaPatches.dylib` over the installed `~/Library/Application Support/DiaPatches/DiaPatches.dylib` and launches Dia in test mode, which needs a patched Dia. That's an install of unreviewed code that quits Dia, so it waits for the step 7 approval and runs after `./install.sh --yes`.
