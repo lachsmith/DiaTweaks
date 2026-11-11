@@ -1,8 +1,8 @@
-// Dia updates go through the diapatch CLI: `check` finds them, `update` stages them, `apply` installs them.
 #import "StdPatch/StdPatch.h"
 
 void DPInstallUpdates(void);
 void DPRunCLI(NSArray<NSString *> *args, void (^completion)(NSString *output));
+void DPRunCLIReporting(NSArray<NSString *> *args, void (^completion)(NSString *output, NSString *reason));  // reason: why it failed, if it said
 void DPHandOffAndQuit(NSArray<NSString *> *args);  // Quits Dia while the CLI runs `args`, then relaunches it.
 
 extern NSString *const DPDia;
@@ -24,11 +24,12 @@ extern NSNotificationName const DPUpdatesDidChangeNotification;
 - (BOOL)staged:(NSString *)part;
 - (BOOL)downloading:(NSString *)part;
 - (BOOL)failed:(NSString *)part;
+- (NSString *)failure:(NSString *)part;  // why the last download failed, if diapatch said
 - (double)progress:(NSString *)part;  // 0–1 while downloading, then -1 while it's verified and patched.
 - (void)download:(NSString *)part then:(void (^)(void))done;
 - (void)installAndRelaunch:(NSArray<NSString *> *)parts;
 
-// For the Debug menu: shows a made-up update for `part` that downloads in a few seconds and installs without relaunching.
+// Debug menu: a fake update that downloads in seconds and installs without relaunching.
 - (void)pretend:(NSString *)part;
 - (void)stopPretending;
 @end

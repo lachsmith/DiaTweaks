@@ -1,5 +1,4 @@
 #!/bin/sh
-# Relaunches Dia with this build in test mode and prints what the patches' self-checks found. Saved settings stay as they are.
 set -eu
 cd "$(dirname "$0")"
 support="${DIAPATCH_HOME:-$HOME/Library/Application Support/DiaPatches}"
@@ -20,7 +19,7 @@ for _ in $(seq 240); do [ -f "$report" ] && break; sleep 0.5; done
 exec python3 - "$report" <<'EOF'
 import json, sys
 report = json.load(open(sys.argv[1]))
-tabs = "in the sidebar" if report["layout"] == "sidebar" else "at the top"
+tabs = "in the sidebar" if report["layout"] == "vertical" else "at the top"
 print(f"Dia {report['dia']}, tabs {tabs}. The test can't move them: switch in Dia and run it again for the other layout.")
 problems = 0
 for key in report["unavailable"]:

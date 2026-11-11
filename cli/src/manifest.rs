@@ -5,7 +5,7 @@ use serde::Deserialize;
 
 use crate::prefs::Prefs;
 
-/// patches.json, written by `make` from the dylib's own list of patches, in Settings order.
+/// Patches are in Settings order.
 #[derive(Deserialize)]
 pub struct Manifest {
     version: u32,
@@ -87,11 +87,17 @@ impl Manifest {
             .and_then(|key| self.index(key))
     }
 
+    pub fn hidden_by(&self, index: usize, state: &[bool]) -> Option<usize> {
+        let disabler = self.disabler(index).filter(|&disabler| state[disabler])?;
+        let option_on = (0..self.patches.len())
+            .any(|option| state[option] && self.requirement(option) == Some(disabler));
+        (!option_on).then_some(disabler)
+    }
+
     pub fn title(&self, index: usize) -> &str {
         &self.patches[index].title
     }
 
-    /// Whether each patch is on, in manifest order.
     pub fn state(&self, prefs: &Prefs) -> Vec<bool> {
         self.patches
             .iter()
@@ -99,7 +105,6 @@ impl Manifest {
             .collect()
     }
 
-    /// Finds tweaks by key or title, ignoring case, spaces and dashes. Every name has to match.
     pub fn resolve(&self, names: &[String]) -> Result<Vec<usize>> {
         let mut found = Vec::new();
         let mut unknown = Vec::new();

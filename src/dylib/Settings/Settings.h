@@ -1,13 +1,12 @@
-// The Patches row and pane, added to Dia's Settings window after Dia's own sidebar rows.
 #import "StdPatch/StdPatch.h"
 #import "Updates/Updates.h"
 #import "SafeMode/SafeMode.h"
 
 void DPInstallSettings(void);
+void DPInstallPreviews(void);
 
 extern NSToolbarItemIdentifier const DPSearchItemIdentifier;
 
-// Controls.m: the pieces the pane is built from, styled like macOS System Settings.
 NSView *DPGroup(NSArray<NSView *> *rows);
 NSView *DPRow(NSView *leading, NSView *trailing);
 NSView *DPLinkRow(NSView *row, NSString *title, void (^open)(void));
@@ -15,7 +14,7 @@ NSTextField *DPLabel(NSString *text, CGFloat size, NSFontWeight weight, NSColor 
 NSTextField *DPHeader(NSString *text);
 NSView *DPIconTile(NSString *symbol, NSColor *color);
 NSView *DPIconTileOfSize(NSString *symbol, NSColor *color, CGFloat size);
-NSImageView *DPSymbol(NSString *symbol, CGFloat size, NSColor *color);
+NSImageView *DPSymbol(NSString *symbols, CGFloat size, NSColor *color);
 NSStackView *DPColumn(NSArray<NSView *> *views, CGFloat spacing);
 void DPFillStack(NSStackView *stack, NSArray<NSView *> *views);
 
@@ -33,46 +32,48 @@ void DPFillStack(NSStackView *stack, NSArray<NSView *> *views);
 - (void)sync;
 @end
 
-// A patch, or a command when `patch` is NULL.
-typedef struct {
-    DPPatch *patch;
-    __unsafe_unretained NSString *key, *title, *detail, *symbol, *tint, *where;
-} DPItem;
-
-DPItem DPPatchItem(DPPatch *patch);
 void DPForEachOption(DPPatch *patch, void (^body)(DPPatch *option));
 NSString *DPWhyDisabled(DPPatch *patch);
 NSString *DPWhyHidden(DPPatch *patch);
-NSURL *DPWikiURL(DPItem item);
+NSString *DPWhyHiddenBy(DPPatch *disabler);
+NSURL *DPWikiURL(DPPatch *patch);
 
 @interface DPPreviewView : DPFillView
 - (instancetype)initWithKey:(NSString *)key;
++ (void)preload;
 @end
 
 @interface DPPageView : NSStackView
-- (instancetype)initWithItem:(DPItem)item;
+- (instancetype)initWithPatch:(DPPatch *)patch;
 - (void)sync;
 @end
 
-@interface DPOverviewView : NSStackView
+@protocol DPPaneContent <NSObject>
+@property (nonatomic, copy) void (^open)(NSString *title, NSView *page);
+@optional
+- (void)syncWithQuery:(NSString *)query;  // Gives the pane a search field.
+- (void)refresh;  // Each time the pane is shown.
+@end
+
+@interface DPOverviewView : NSStackView <DPPaneContent>
 @property (nonatomic, copy) void (^open)(NSString *title, NSView *page);
 @property (nonatomic, strong) NSMapTable<NSView *, NSString *> *searchText;
-@property (nonatomic, strong) NSTextField *updateSummary;
 - (void)syncWithQuery:(NSString *)query;
+@end
+
+@interface DPHomeView : NSStackView <DPPaneContent>
+@property (nonatomic, copy) void (^open)(NSString *title, NSView *page);
+- (void)refresh;
 @end
 
 @interface DPSoftwareUpdateView : NSStackView
 @end
 
-@interface DPOverviewView (Updates)
-- (NSArray<NSView *> *)makeUpdateRows;
-- (NSView *)makeSafeModeRow;
-- (void)refresh;
-@end
-
 @interface DPPaneView : NSView <NSSearchFieldDelegate>
-@property (nonatomic, strong) NSSearchToolbarItem *searchItem;
-@property (nonatomic, strong) DPOverviewView *overview;
+- (instancetype)initWithTitle:(NSString *)title content:(NSView<DPPaneContent> *)content;
+@property (nonatomic, readonly) NSString *title;
+@property (nonatomic, readonly) NSView<DPPaneContent> *content;
+@property (nonatomic, readonly) NSSearchToolbarItem *searchItem;  // nil when the content has nothing to search.
 @property (nonatomic, copy) void (^titleChanged)(NSString *title, BOOL canGoBack);
 @property (nonatomic, readonly) BOOL showsPage;
 - (void)goBack;

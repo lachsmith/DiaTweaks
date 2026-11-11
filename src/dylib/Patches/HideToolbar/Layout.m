@@ -1,4 +1,5 @@
 #import "HideToolbar.h"
+#import "Patches/EdgeToEdge/EdgeToEdge.h"
 
 NSHashTable<NSView *> *DPPanes;
 static char DPFrameKey, DPFillsKey;
@@ -15,14 +16,52 @@ static void DPAssignFrame(NSView *view, NSRect laidOut, NSRect frame) {
 CGFloat DPTop(NSView *pane, NSRect r) { return pane.isFlipped ? NSMinY(r) : NSHeight(pane.bounds) - NSMaxY(r); }
 CGFloat DPBottom(NSView *pane, NSRect r) { return pane.isFlipped ? NSMaxY(r) : NSHeight(pane.bounds) - NSMinY(r); }
 
-// Dia lays the bookmarks bar out right under the toolbar, so it hides and shows with it.
 NSView *DPBookmarksUnder(NSView *pane, NSView *bar) {
     for (NSView *sub in pane.subviews)
-        if (DPIsKind(sub, DPDiaBookmarksBar) && !sub.hidden && fabs(DPTop(pane, DPLaidOutFrame(sub)) - DPBottom(pane, bar.frame)) < 0.5) return sub;
+        if (DPIsKind(sub, DPDiaBookmarksBar) && !sub.hidden && fabs(DPTop(pane, DPLaidOutFrame(sub)) - DPBottom(pane, DPLaidOutFrame(bar))) < 0.5) return sub;
     return nil;
 }
 
-// Fades the bars out by `progress` and slides everything stacked under them up into their place.
+// Only a docked sidebar moves the content container; one floating at the window's edge leaves it.
+static BOOL DPSidebarDocked(NSView *pane) {
+    for (NSView *view = pane.superview; view; view = view.superview)
+        if (DPIsKind(view, DPDiaContentContainer)) return DPBesideSidebar(view);
+    return NO;
+}
+
+// The new tab page sits in the pane inside a swipe-handling view.
+static BOOL DPShowsNewTab(NSView *pane) {
+    for (NSView *sub in pane.subviews)
+        for (NSView *page in sub.subviews)
+            if (DPIsKind(page, DPDiaNewTabPage) && !page.hiddenOrHasHiddenAncestor) return YES;
+    return NO;
+}
+
+BOOL DPKeptInPlace(NSView *pane) {
+    return (DPShowToolbarWithSidebar.on && DPSidebarDocked(pane)) || (DPShowToolbarOnNewTab.on && DPShowsNewTab(pane));
+}
+
+NSString *DPVerifyKeptInPlace(DPPatch *patch) {
+    for (NSView *pane in DPFindViews(DPDiaContentPane)) {
+        DPToolbarHover *hover = [DPToolbarHover forPane:pane];
+        NSView *bar = DPSubview(pane, DPDiaToolbar);
+        if (!DPHideToolbar.on || !bar || bar.hiddenOrHasHiddenAncestor || hover.revealed) continue;
+        BOOL kept = DPKeptInPlace(pane);
+        if (kept && bar.alphaValue < 0.99) return @"toolbar stays hidden where an option keeps it";
+        if (!kept && bar.alphaValue > 0.01) return @"toolbar shows where nothing keeps it";
+    }
+    return nil;
+}
+
+static CGFloat DPHidden(DPToolbarHover *hover) { return DPHideToolbar.progress * (1 - hover.inPlaceProgress); }
+
+void DPApplyToolbarOpacity(DPToolbarHover *hover) {
+    CGFloat alpha = 1 - DPHidden(hover) * (1 - hover.progress);
+    if (hover.bar && hover.bar.alphaValue != alpha) hover.bar.alphaValue = alpha;
+    if (hover.bookmarks && hover.bookmarks.alphaValue != alpha) hover.bookmarks.alphaValue = alpha;
+    DPRepaintTabs(hover.pane.window);
+}
+
 void DPApplyToolbar(NSView *pane) {
     NSView *bar = DPSubview(pane, DPDiaToolbar);
     if (!bar) return;
@@ -32,11 +71,10 @@ void DPApplyToolbar(NSView *pane) {
     DPToolbarHover *hover = [DPToolbarHover attachToPane:pane];
     [hover updateForBar:bar bookmarks:bookmarks];
 
-    CGFloat progress = DPHideToolbar.progress;
-    for (NSView *view in bars) view.alphaValue = 1 - progress * (1 - hover.progress);
+    CGFloat progress = DPHidden(hover);
+    DPApplyToolbarOpacity(hover);
     NSIndexSet *slots = [pane.subviews indexesOfObjectsPassingTest:^BOOL(NSView *sub, NSUInteger i, BOOL *stop) { return [bars containsObject:sub]; }];
     BOOL onTop = slots.firstIndex == pane.subviews.count - bars.count, atBottom = slots.lastIndex == bars.count - 1;
-    // Revealed on hover, the bars float over the page instead of pushing it down.
     if (hover.revealed || hover.progress > 0) {
         if (!onTop) for (NSView *view in bars) [pane addSubview:view positioned:NSWindowAbove relativeTo:nil];
     } else if (progress > 0 && !atBottom) {
@@ -45,7 +83,14 @@ void DPApplyToolbar(NSView *pane) {
         for (NSView *view in bars) [pane addSubview:view positioned:NSWindowAbove relativeTo:nil];
     }
 
-    CGFloat edge = DPBottom(pane, DPLaidOutFrame(bars.lastObject)), shift = (edge - DPTop(pane, bar.frame)) * progress;
+    CGFloat edge = DPBottom(pane, DPLaidOutFrame(bars.lastObject)), shift = (edge - DPTop(pane, DPLaidOutFrame(bar))) * progress;
+    // Hidden bars wait above the pane so the address field's text cursor can't reach the page.
+    CGFloat lift = progress == 1 && !hover.revealed && hover.progress == 0 ? edge : 0;
+    for (NSView *view in bars) {
+        NSRect laidOut = DPLaidOutFrame(view), frame = laidOut;
+        frame.origin.y += pane.isFlipped ? -lift : lift;
+        DPAssignFrame(view, laidOut, frame);
+    }
     NSMutableArray<NSView *> *stack = [NSMutableArray new];
     for (NSView *sub in pane.subviews) if (![bars containsObject:sub]) [stack addObject:sub];
     [stack sortUsingComparator:^NSComparisonResult(NSView *a, NSView *b) {

@@ -44,12 +44,57 @@ static void DPAnimate(void) {
     [NSRunLoop.mainRunLoop addTimer:timer forMode:NSRunLoopCommonModes];
 }
 
+BOOL DPTesting;
+
+static void DPEnsureReady(DPPatch *patch) {
+    NSString *problem = patch->ready(patch);
+    for (int tries = 1; problem && tries < 3; tries++) {
+        if (patch->apply) patch->apply(patch);
+        problem = patch->ready(patch);
+    }
+    // The test reports the problem itself; an alert would stop it until someone answers.
+    if (!problem || DPTesting) return;
+    NSLog(@"DiaPatches: %@ couldn't turn on: %@", patch->title, problem);
+    patch->on = NO;
+    [DPDefaults setBool:NO forKey:patch->key];
+    if (patch->apply) patch->apply(patch);
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [NSNotificationCenter.defaultCenter postNotificationName:DPPatchesDidChangeNotification object:nil];
+        NSAlert *alert = [NSAlert new];
+        alert.messageText = [NSString stringWithFormat:@"Couldn’t turn on %@", patch->title];
+        alert.informativeText = problem;
+        [alert runModal];
+    });
+}
+
 void DPSetPatch(DPPatch *patch, BOOL on, BOOL save) {
     if (patch->on == on) return;
     patch->on = on;
     if (save) [DPDefaults setBool:on forKey:patch->key];
     if (patch->apply) patch->apply(patch);
     else DPAnimate();
+    if (on && patch->ready) DPEnsureReady(patch);
+}
+
+NSString *DPAppSupport(NSString *path) {
+    return [NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, YES).firstObject stringByAppendingPathComponent:path];
+}
+
+NSString *DPRelayProblem(void) {
+    for (NSString *path in @[ @"DiaPatches/bin/diapatch", @"DiaPatches/pristine/Dia.app/Contents/MacOS/Dia" ])
+        if (![NSFileManager.defaultManager isExecutableFileAtPath:DPAppSupport(path)])
+            return [NSString stringWithFormat:@"%@ is missing. Install DiaTweaks again to put it back.", DPAppSupport(path)];
+    return nil;
+}
+
+NSString *DPHostProblem(NSString *manifest, NSString *name) {
+    NSData *data = [NSData dataWithContentsOfFile:manifest];
+    if (!data) return [NSString stringWithFormat:@"%@ couldn’t be written.", manifest];
+    NSDictionary *host = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+    if (![host isKindOfClass:NSDictionary.class] || ![host[@"name"] isEqual:name]) return [NSString stringWithFormat:@"%@ isn’t a valid host file.", manifest];
+    if (![host[@"path"] isEqual:DPAppSupport(@"DiaPatches/bin/diapatch")])
+        return [NSString stringWithFormat:@"Another app has replaced %@, so its extension goes to %@ instead.", manifest, host[@"path"]];
+    return nil;
 }
 
 BOOL DPSavedOn(DPPatch *patch) {
@@ -57,11 +102,20 @@ BOOL DPSavedOn(DPPatch *patch) {
     return !patch->unavailable && (value ? [value boolValue] : patch->defaultOn);
 }
 
+NSString *DPChoice(DPPatch *patch) {
+    id value = [DPDefaults objectForKey:patch->choice];
+    return [value isKindOfClass:NSString.class] ? value : patch->defaultChoice;
+}
+
+void DPSetChoice(DPPatch *patch, NSString *value) {
+    [DPDefaults setObject:value forKey:patch->choice];
+    if (patch->on && patch->apply) patch->apply(patch);
+}
+
 static int DPCompareOrder(const void *a, const void *b) {
     return (*(DPPatch *const *)a)->order - (*(DPPatch *const *)b)->order;
 }
 
-// The DP_PATCH entries, in Settings order.
 static void DPReadPatches(void) {
     unsigned long size = 0;
     DPPatch **entries = (DPPatch **)getsectiondata(&__dso_handle, "__DATA", "__dppatches", &size);
@@ -70,14 +124,25 @@ static void DPReadPatches(void) {
     DPPatchCount = size / sizeof *sorted;
     qsort(sorted, DPPatchCount, sizeof *sorted, DPCompareOrder);
     DPPatches = sorted;
+    NSMutableArray<NSString *> *sections = [NSMutableArray new];
+    for (NSUInteger i = 0; i < DPPatchCount; i++) {
+        DPPatch *patch = sorted[i];
+        NSString *section = patch->section ?: DPRequired(patch)->section ?: @"Other";
+        if (![sections containsObject:section]) [sections addObject:section];
+        patch->order = (int)([sections indexOfObject:section] << 24 | [patch->title hasPrefix:@"Hide "] << 16 | patch->title.length << 8 | i);
+    }
+    qsort(sorted, DPPatchCount, sizeof *sorted, DPCompareOrder);
 }
 
 void DPLoadPatches(void) {
     DPDefaults = [[NSUserDefaults alloc] initWithSuiteName:@"com.diapatches"];
     DPReadPatches();
 
-    for (NSUInteger i = 0; i < DPPatchCount; i++)
+    for (NSUInteger i = 0; i < DPPatchCount; i++) {
         for (const char *const *name = DPPatches[i]->classes; name && *name; name++) DPPatches[i]->unavailable |= !objc_getClass(*name);
+        for (const char *const *name = DPPatches[i]->builtIn; name && *name; name++) DPPatches[i]->inDia |= objc_getClass(*name) != nil;
+        DPPatches[i]->unavailable |= DPPatches[i]->inDia;
+    }
     for (NSUInteger i = 0; i < DPPatchCount; i++) {
         DPPatch *patch = DPPatches[i];
         for (DPPatch *required = DPRequired(patch); required; required = DPRequired(required)) patch->unavailable |= required->unavailable;
@@ -89,7 +154,6 @@ void DPLoadPatches(void) {
     }
 }
 
-// diatweaks saves settings, then posts com.diapatches.changed. They apply like switches flipped in Settings, without saving them again.
 static void DPApplySavedSettings(void) {
     CFPreferencesAppSynchronize(CFSTR("com.diapatches"));
     for (NSUInteger i = 0; i < DPPatchCount; i++) DPSetPatch(DPPatches[i], DPSavedOn(DPPatches[i]), NO);
@@ -98,6 +162,9 @@ static void DPApplySavedSettings(void) {
 
 void DPInstallPatches(void) {
     for (NSUInteger i = 0; i < DPPatchCount; i++) if (!DPPatches[i]->unavailable && DPPatches[i]->install) DPPatches[i]->install();
+    DPOnLaunch(^{
+        for (NSUInteger i = 0; i < DPPatchCount; i++) if (DPPatches[i]->on && DPPatches[i]->ready) DPEnsureReady(DPPatches[i]);
+    });
     DPInstallHides();
     int token;
     notify_register_dispatch("com.diapatches.changed", &token, dispatch_get_main_queue(), ^(int _) { DPApplySavedSettings(); });
@@ -115,6 +182,9 @@ BOOL DPWriteManifest(NSString *path) {
             @"defaultOn": @(patch->defaultOn),
             @"requires": required ? required->key : NSNull.null,
             @"disabledBy": disabler ? disabler->key : NSNull.null,
+            @"section": patch->section ?: NSNull.null,
+            @"tint": patch->tint ?: NSNull.null,
+            @"symbol": patch->symbol ?: NSNull.null,
         }];
     }
     NSData *json = [NSJSONSerialization dataWithJSONObject:@{@"version": @1, @"patches": patches}
