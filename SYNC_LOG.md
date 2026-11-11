@@ -208,3 +208,7 @@ check-fork: http(s) hosts in src/, cli/, install.sh, Makefile and scripts/
     ok (exception: wiki docs check)                  1  github.com
 check-fork: ok
 ```
+
+### 2. FORK.md caveat: done
+
+Added a note under Rules: check-fork only catches URLs written literally in the code, so a sync review should still read the diff of anything that touches networking.

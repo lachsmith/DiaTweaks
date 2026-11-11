@@ -6,6 +6,8 @@ This is a personal fork of [JaceThings/DiaTweaks](https://github.com/JaceThings/
 
 `scripts/check-fork` enforces these. `install.sh` runs it before building and stops if it fails. It checks the working tree, not git history.
 
+check-fork only catches URLs written literally in the code. It misses a URL that's built at runtime, read from settings or the environment, or split across strings. So when reviewing a sync, still read the diff of anything that touches networking (`fetch`, `curl`, `NSURLSession`, `NSURL`, `openURL`, `git clone`, downloads).
+
 1. **No release code.** None of these may appear: `kReleases`, `latestTweaks`, `stageTweaks`, `DiaTweaks.zip`, `staged/DiaTweaks`, `release.plist`, `autoUpdateTweaks`, `api.github.com`, `/compare`, `.github/workflows/release.yml`. `diapatch self-update` may only refuse, and nothing may run it.
 2. **Known hosts only.** Every http(s) host in `src/`, `cli/`, `install.sh`, the `Makefile` and `scripts/` is listed. Any host other than these fails:
    - `diabrowser.com` (with or without `www.`)
