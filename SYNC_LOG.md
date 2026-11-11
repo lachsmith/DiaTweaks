@@ -17,11 +17,11 @@ No branch is created or renamed to `main`, and nothing is committed to `my-versi
 - [x] 5. Confirm defaultOn is NO for Passkeys, ICloudPasswords, OnePassword
 - [x] 6. make, make test (make + make check pass; `make test` ran after the install in step 7)
 - [x] 7. Summary, then install on approval, diapatch status
-- [ ] 8. Push and open PR into my-version on approval
+- [x] 8. Push and open PR into my-version on approval (https://github.com/lachsmith/DiaTweaks/pull/1, not merged)
 
 ## Current state / next action
 
-Step 8 in progress: pushing `sync-upstream` and the `pre-sync-2026-11-11` tag to origin, and opening a PR into `my-version` on lachsmith/DiaTweaks. The PR is **not to be merged** until the user's reviewer has looked at it. SYNC_LOG.md stays in the PR (the user didn't choose to move it into FORK.md; it can still be moved before merge).
+All steps done. PR https://github.com/lachsmith/DiaTweaks/pull/1 (sync-upstream → my-version) is open and **must not be merged** until the user's reviewer approves. Remaining for the user: check that Settings → Home → Software Update offers only Dia, get the review, decide whether SYNC_LOG.md stays or moves into FORK.md's History section, then merge. To abandon: `git switch my-version && ./install.sh --yes`, and leave sync-upstream for the user to delete.
 
 ## Step log
 
@@ -177,6 +177,8 @@ For the user to look at:
 - `pinTabShortcut` fails in every scenario that includes it. It's probably environmental (sidebar layout or tab state), but I didn't investigate it, because it's upstream tweak code.
 - The CLI change is still uncompiled (no Rust).
 
-### Step 8: in progress (2026-11-11)
+### Step 8: done (2026-11-11)
 
 The user approved pushing `sync-upstream` and the `pre-sync-2026-11-11` tag to origin, and opening a PR into `my-version` on lachsmith/DiaTweaks only. Don't merge: it's going to review first. SYNC_LOG.md stays in the PR.
+
+Ran: `git push -u origin sync-upstream`, `git push origin refs/tags/pre-sync-2026-11-11` (tag at 0f3f9bc), then `gh pr create --repo lachsmith/DiaTweaks --base my-version --head lachsmith:sync-upstream`, which opened https://github.com/lachsmith/DiaTweaks/pull/1. Not merged. Upstream's push URL is DISABLED, so nothing went to JaceThings/DiaTweaks.
