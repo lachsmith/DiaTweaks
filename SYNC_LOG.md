@@ -15,13 +15,13 @@ No branch is created or renamed to `main`, and nothing is committed to `my-versi
 - [x] 3. Compare quarantine handling
 - [x] 4. Write scripts/check-fork and FORK.md (2 host exceptions allowed by the user)
 - [x] 5. Confirm defaultOn is NO for Passkeys, ICloudPasswords, OnePassword
-- [x] 6. make, make test (make + make check pass; `make test` deferred until after the approved install, because it quits Dia)
-- [ ] 7. Summary, then install on approval, diapatch status
+- [x] 6. make, make test (make + make check pass; `make test` ran after the install in step 7)
+- [x] 7. Summary, then install on approval, diapatch status
 - [ ] 8. Push and open PR into my-version on approval
 
 ## Current state / next action
 
-Step 4 follow-up done: check-fork passes. Next: step 7, approved by the user. Run `./install.sh --yes`, then `~/Library/Application Support/DiaPatches/bin/diapatch status`, then `make test`.
+Step 7 done: the merged build is installed and Dia is running normally. Waiting for the user to (a) check that Settings → Home → Software Update shows only Dia, and (b) approve step 8 and say whether SYNC_LOG.md stays in the PR or moves into FORK.md's History section. Next action on a yes: `git push -u origin sync-upstream`, then open a PR from sync-upstream into my-version on lachsmith/DiaTweaks only.
 
 ## Step log
 
@@ -155,3 +155,24 @@ check-fork: http(s) hosts in src/ and cli/
     ok (exception: Peek search fallback)             1  www.google.com
 check-fork: ok
 ```
+
+### Step 7: done (2026-11-11 11:37)
+
+The user approved installing (they had saved their work in Dia). Ran:
+- `diapatch status` before installing: 1.56.2 (90792), patched yes, staged none, feed 1.56.2, stable.
+- `./install.sh --yes`: check-fork ok. Skipped the diatweaks command (no Rust). Log: "linked Dia's catalog for icon switching", signed, "installed patched Dia 1.56.2 (90792) at /Applications/Dia.app". Dia quit and reopened.
+- `diapatch status` after: official 1.56.2 (90792), installed 1.56.2 (90792), patched yes, staged none, feed 1.56.2 (90792), channel stable.
+- `diapatch check --json`: only a `dia` entry (available false, latest 1.56.2). No DiaTweaks entry.
+- `diapatch self-update`: refuses with the build-from-source message, exit 1.
+- `xattr -lr /Applications/Dia.app`: no `com.apple.quarantine`.
+- `codesign --verify --deep /Applications/Dia.app`: ok. With `--strict` it reports "invalid destination for symbolic link in bundle", because upstream's App Icon support replaces `Contents/Resources/Assets.car` with a symlink to `DiaPatches/icons/builds/90792/current.car` so icons switch without re-signing. That's upstream behaviour, not a sync regression: the pristine copy passes `--strict`, and Dia launches.
+- `make test` (`./test.sh`): exit 2, **98 scenarios, 70 problems**. All 70 are four tweaks failing for environment reasons: `passkeys` ×18 and `icloudPasswords` ×18 (can't create `~/Library/Application Support/Google/Chrome/NativeMessagingHosts`, permission denied), `onePassword` ×17 (1Password isn't installed), and `pinTabShortcut` ×17 ("no tab's menu has Pin as Tab or Unpin"). Every other scenario passed, including "all off", every other "alone" scenario and "saved settings". Nothing failed in Updates or Settings.
+
+Side effects of `make test`, checked:
+- The self-test switches every tweak on, without saving, for its scenarios. That includes the three password tweaks. Their writes outside DiaPatches were refused: there's no `Google/Chrome` folder, no `/Applications/.DiaTweaks` and no LaunchAgent. `defaults read com.diapatches` has no password tweak saved on.
+- It left `DiaPatches/passkeys-extension/` and `DiaPatches/little-dia-89f6f2a0/`, and Dia stayed running in test mode (`DIAPATCH_TEST` set). Quit Dia (AppleScript quit) and reopened it normally. On launch, Dia removed both leftover folders itself.
+
+For the user to look at:
+- Check that Settings → **Home** → Software Update offers only Dia (upstream renamed the page from Patches).
+- `pinTabShortcut` fails in every scenario that includes it. It's probably environmental (sidebar layout or tab state), but I didn't investigate it, because it's upstream tweak code.
+- The CLI change is still uncompiled (no Rust).
