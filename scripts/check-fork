@@ -1,0 +1,62 @@
+#!/bin/sh
+# Fails if this fork's rules are broken: no pre-built DiaTweaks release code, and no web hosts in src/ or cli/
+# beyond Dia's and the DiaTweaks wiki. Scans the working tree (tracked and untracked files), not git history.
+# The rules are explained in FORK.md. install.sh runs this before building.
+set -eu
+cd "$(dirname "$0")/.."
+failed=0
+fail() { printf 'check-fork: %s\n' "$*" >&2; failed=1; }
+
+# Files that name the patterns to explain them.
+skip=':!scripts/check-fork :!FORK.md :!SYNC_LOG.md'
+
+# 1. Release code: checking for, downloading, staging or installing pre-built DiaTweaks.
+# shellcheck disable=SC2086
+if hits=$(git grep -I --untracked -n -F \
+    -e kReleases -e latestTweaks -e stageTweaks -e DiaTweaks.zip -e staged/DiaTweaks -e release.plist \
+    -e autoUpdateTweaks -e api.github.com -e /compare -e .github/workflows/release.yml \
+    -- . $skip); then
+    fail "release code found:"
+    printf '%s\n' "$hits" | sed 's/^/    /' >&2
+fi
+[ ! -e .github/workflows/release.yml ] || fail ".github/workflows/release.yml exists"
+
+# self-update may only refuse. Nothing may run it.
+selfupdate=$(git grep -I --untracked -h -F 'isEqualToString:@"self-update"]' -- src/diapatch || true)
+if [ -n "$selfupdate" ] && ! printf '%s\n' "$selfupdate" | grep -q '? fail('; then
+    fail "diapatch self-update does more than refuse: $selfupdate"
+fi
+if hits=$(git grep -I --untracked -n -E '@\[ *@"self-update"|&\[ *"self-update"|"self-update" *[],]' -- src cli ':!src/diapatch/main.m'); then
+    fail "something runs self-update:"
+    printf '%s\n' "$hits" | sed 's/^/    /' >&2
+fi
+
+# 2. Web hosts in src/ and cli/. Each URL is listed with its verdict.
+echo "check-fork: http(s) hosts in src/ and cli/"
+report=$(git grep -I --untracked -n -o -E 'https?://[A-Za-z0-9._~%:-]+(/[A-Za-z0-9._~%/+-]*)?' -- src cli |
+    awk -F: '
+    {
+        file = $1; url = substr($0, length($1) + length($2) + 3)
+        sub(/^https?:\/\//, "", url); sub(/[.\/]+$/, "", url)
+        host = url; sub(/\/.*/, "", host); sub(/:[0-9]+$/, "", host); host = tolower(host)
+        verdict = "FAIL"
+        if (file ~ /(^|\/)(tests?|fixtures?)\// || file ~ /_test\.|Tests?\.|\.test\./) verdict = "ignored (test fixture)"
+        else if (host ~ /(^|\.)example\.(com|org|net)$/ || host ~ /\.(example|test|invalid)$/ || host == "localhost" || host ~ /^127\./)
+            verdict = "ignored (example URL)"
+        else if (url == "www.andymatuschak.org/xml-namespaces/sparkle") verdict = "ignored (XML namespace name, never fetched)"
+        else if (file == "cli/Cargo.lock" && url == "github.com/rust-lang/crates.io-index") verdict = "ignored (Cargo registry ID)"
+        else if (host == "diabrowser.com" || host == "www.diabrowser.com" || host == "releases.diabrowser.com") verdict = "ok"
+        else if (url ~ /^github\.com\/JaceThings\/DiaTweaks\/wiki(\/|$)/) verdict = "ok"
+        else if (url ~ /^raw\.githubusercontent\.com\/wiki\/JaceThings\/DiaTweaks(\/|$)/) verdict = "ok"
+        key = verdict "\t" (verdict == "FAIL" ? url "  in " file : host)
+        if (!(key in seen)) order[++n] = key
+        seen[key]++
+    }
+    END { for (i = 1; i <= n; i++) { split(order[i], k, "\t"); printf "%s\t%d\t%s\n", k[1], seen[order[i]], k[2] } }' | sort)
+printf '%s\n' "$report" | awk -F'\t' 'NF { printf "    %-45s %4d  %s\n", $1, $2, $3 }'
+if printf '%s\n' "$report" | grep -q '^FAIL'; then
+    fail "hosts outside diabrowser.com, releases.diabrowser.com, github.com/JaceThings/DiaTweaks/wiki and raw.githubusercontent.com/wiki/JaceThings/DiaTweaks (see FAIL above)"
+fi
+
+[ "$failed" = 0 ] && echo "check-fork: ok"
+exit "$failed"

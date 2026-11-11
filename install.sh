@@ -11,6 +11,7 @@ incoming="$support/.incoming"
 trap 'rm -rf "$incoming"' EXIT
 trap 'exit 130' INT TERM
 
+scripts/check-fork  # this fork's rules (FORK.md): no pre-built release code, no unexpected web hosts
 make -s
 
 cli=

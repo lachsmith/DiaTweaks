@@ -13,7 +13,7 @@ No branch is created or renamed to `main`, and nothing is committed to `my-versi
 - [x] 1. Prepare repo, tag, branch, create this log
 - [x] 2. Merge upstream/main and resolve conflicts
 - [x] 3. Compare quarantine handling
-- [ ] 4. Write scripts/check-fork and FORK.md
+- [x] 4. Write scripts/check-fork and FORK.md (2 host findings await the user)
 - [ ] 5. Confirm defaultOn is NO for Passkeys, ICloudPasswords, OnePassword
 - [ ] 6. make, make test
 - [ ] 7. Summary, then install on approval, diapatch status
@@ -21,7 +21,7 @@ No branch is created or renamed to `main`, and nothing is committed to `my-versi
 
 ## Current state / next action
 
-Step 3 done. Next: step 4, write `scripts/check-fork` and `FORK.md`, and run check-fork from install.sh before building. Open question for step 4: the upstream repo and issues links in Settings/Home.m.
+Step 4 done, but `scripts/check-fork` currently FAILS on two upstream URLs (Home.m GitHub/issues links, Peek's Google fallback). Waiting for the user's decision; until then, `install.sh` stops before building. Next: step 5 (read-only defaultOn check), then step 6 (make, make test).
 
 ## Step log
 
@@ -83,3 +83,32 @@ Upstream's quarantine handling after the merge:
 Decision: keep the fork's `xattr -cr work` after `sign(work)` and before `moveBundle` in `build()`, and keep upstream's handling too. The fork's call is the only one that runs on the finished patched bundle. When Dia starts diapatch (Software Update, install on quit), every file `build()` creates after the clone is quarantined. Upstream's calls clean the inputs and are still needed for `codesign --strict`. The two complement each other, so neither replaces the other.
 
 For the user to look at: as f09c7bf said, the post-signing clear still hasn't been proven against a real Dia update started from inside Dia.
+
+### Step 4: done, with findings for the user (2026-11-11)
+
+Added:
+- `scripts/check-fork`: scans the working tree (tracked and untracked, via `git grep --untracked`). It fails on the release patterns in the plan, on `.github/workflows/release.yml` existing, on `diapatch self-update` doing anything but `fail(`, and on anything in src/ or cli/ calling `self-update`. It lists every http(s) host in src/ and cli/ with a verdict, and fails on hosts outside the allowlist. It skips itself, FORK.md and SYNC_LOG.md, which name the patterns to explain them.
+- Ignored by design, all listed in the output: test fixtures (`tests/`, `fixtures/`), example hosts (`example.com/org/net`, `.example`, `.test`, `.invalid`, `localhost`, `127.*`), Sparkle's XML namespace name (`http://www.andymatuschak.org/xml-namespaces/sparkle`, an identifier in the feed parser, never fetched), and Cargo.lock's `github.com/rust-lang/crates.io-index` (Cargo's registry ID). `www.diabrowser.com` counts as `diabrowser.com`.
+- `install.sh` runs `scripts/check-fork` before `make -s`, and `set -e` stops the install if it fails.
+- `FORK.md`: the rules, how to update, how to sync, and a History section.
+
+Ran `scripts/check-fork`. Negative test: planting a file with `api.github.com` + `stageTweaks` + a `self-update` call, plus a `.github/workflows/release.yml`, made all four checks fail (planted files removed afterwards).
+
+Current output:
+
+```
+check-fork: http(s) hosts in src/ and cli/
+    FAIL                                             1  github.com/JaceThings/DiaTweaks  in src/dylib/Settings/Home.m
+    FAIL                                             1  www.google.com/search  in src/dylib/Patches/Peek/Pages.m
+    ignored (Cargo registry ID)                    105  github.com
+    ignored (XML namespace name, never fetched)      1  www.andymatuschak.org
+    ok                                               1  github.com
+    ok                                               1  raw.githubusercontent.com
+    ok                                               1  releases.diabrowser.com
+    ok                                               6  www.diabrowser.com
+check-fork: hosts outside diabrowser.com, releases.diabrowser.com, github.com/JaceThings/DiaTweaks/wiki and raw.githubusercontent.com/wiki/JaceThings/DiaTweaks (see FAIL above)
+```
+
+**For the user to decide.** Both are upstream code, and neither is release code:
+1. `src/dylib/Settings/Home.m`: the "GitHub" and "Report a Bug" rows open `https://github.com/JaceThings/DiaTweaks` and `/issues/new/choose` in the browser (the "Wiki" row is allowed). Options: allow these two links in check-fork, or point them at the fork, or drop the two rows.
+2. `src/dylib/Patches/Peek/Pages.m:74`: the Peek tweak falls back to `https://www.google.com/search?q=…` when Dia's default search engine has no usable template. This is upstream tweak code, so per the plan it's not edited without asking. Options: allow `www.google.com/search` in check-fork, or change Peek's fallback.
