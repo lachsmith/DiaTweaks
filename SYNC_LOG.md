@@ -21,7 +21,7 @@ No branch is created or renamed to `main`, and nothing is committed to `my-versi
 
 ## Current state / next action
 
-Step 7 done: the merged build is installed and Dia is running normally. Waiting for the user to (a) check that Settings → Home → Software Update shows only Dia, and (b) approve step 8 and say whether SYNC_LOG.md stays in the PR or moves into FORK.md's History section. Next action on a yes: `git push -u origin sync-upstream`, then open a PR from sync-upstream into my-version on lachsmith/DiaTweaks only.
+Step 8 in progress: pushing `sync-upstream` and the `pre-sync-2026-11-11` tag to origin, and opening a PR into `my-version` on lachsmith/DiaTweaks. The PR is **not to be merged** until the user's reviewer has looked at it. SYNC_LOG.md stays in the PR (the user didn't choose to move it into FORK.md; it can still be moved before merge).
 
 ## Step log
 
@@ -176,3 +176,7 @@ For the user to look at:
 - Check that Settings → **Home** → Software Update offers only Dia (upstream renamed the page from Patches).
 - `pinTabShortcut` fails in every scenario that includes it. It's probably environmental (sidebar layout or tab state), but I didn't investigate it, because it's upstream tweak code.
 - The CLI change is still uncompiled (no Rust).
+
+### Step 8: in progress (2026-11-11)
+
+The user approved pushing `sync-upstream` and the `pre-sync-2026-11-11` tag to origin, and opening a PR into `my-version` on lachsmith/DiaTweaks only. Don't merge: it's going to review first. SYNC_LOG.md stays in the PR.
