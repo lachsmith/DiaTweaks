@@ -182,3 +182,29 @@ For the user to look at:
 The user approved pushing `sync-upstream` and the `pre-sync-2026-11-11` tag to origin, and opening a PR into `my-version` on lachsmith/DiaTweaks only. Don't merge: it's going to review first. SYNC_LOG.md stays in the PR.
 
 Ran: `git push -u origin sync-upstream`, `git push origin refs/tags/pre-sync-2026-11-11` (tag at 0f3f9bc), then `gh pr create --repo lachsmith/DiaTweaks --base my-version --head lachsmith:sync-upstream`, which opened https://github.com/lachsmith/DiaTweaks/pull/1. Not merged. Upstream's push URL is DISABLED, so nothing went to JaceThings/DiaTweaks.
+
+## Follow-ups on PR #1 (2026-11-11)
+
+### 1. check-fork scans install.sh, Makefile and scripts/: done
+
+The host scan now covers `src/`, `cli/`, `install.sh`, the `Makefile` and `scripts/`, excluding `scripts/check-fork` itself. Exceptions are exact and scoped to one file, each with a comment in check-fork:
+- `install.sh`: `sh.rustup.rs` and `rustup.rs` (the optional Rust install, which asks first and is skipped with `--yes`, plus the help link)
+- `scripts/check-tweak-docs`: `github.com/JaceThings/DiaTweaks.wiki.git` (a contributor-only check that clones the wiki read-only)
+
+FORK.md's rule 2 is updated to match. Test: a planted `scripts/zz-plant` and an extra Makefile line made check-fork fail on `downloads.badhost.net` (Makefile) and on `sh.rustup.rs` outside install.sh, then were removed. Current output:
+
+```
+check-fork: http(s) hosts in src/, cli/, install.sh, Makefile and scripts/
+    ignored (Cargo registry ID)                    105  github.com
+    ignored (XML namespace name, never fetched)      1  www.andymatuschak.org
+    ok                                               1  github.com
+    ok                                               1  raw.githubusercontent.com
+    ok                                               1  releases.diabrowser.com
+    ok                                               6  www.diabrowser.com
+    ok (exception: Home.m links)                     1  github.com
+    ok (exception: Peek search fallback)             1  www.google.com
+    ok (exception: install.sh rustup)                1  rustup.rs
+    ok (exception: install.sh rustup)                1  sh.rustup.rs
+    ok (exception: wiki docs check)                  1  github.com
+check-fork: ok
+```

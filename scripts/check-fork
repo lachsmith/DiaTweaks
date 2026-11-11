@@ -31,9 +31,10 @@ if hits=$(git grep -I --untracked -n -E '@\[ *@"self-update"|&\[ *"self-update"|
     printf '%s\n' "$hits" | sed 's/^/    /' >&2
 fi
 
-# 2. Web hosts in src/ and cli/. Each URL is listed with its verdict.
-echo "check-fork: http(s) hosts in src/ and cli/"
-report=$(git grep -I --untracked -n -o -E 'https?://[A-Za-z0-9._~%:-]+(/[A-Za-z0-9._~%/+-]*)?' -- src cli |
+# 2. Web hosts in src/, cli/, install.sh, the Makefile and scripts/ (but not this file, which names hosts to allow them).
+# Each URL is listed with its verdict.
+echo "check-fork: http(s) hosts in src/, cli/, install.sh, Makefile and scripts/"
+report=$(git grep -I --untracked -n -o -E 'https?://[A-Za-z0-9._~%:-]+(/[A-Za-z0-9._~%/+-]*)?' -- src cli install.sh Makefile scripts ':!scripts/check-fork' |
     awk -F: '
     {
         file = $1; url = substr($0, length($1) + length($2) + 3)
@@ -54,6 +55,12 @@ report=$(git grep -I --untracked -n -o -E 'https?://[A-Za-z0-9._~%:-]+(/[A-Za-z0
         # Patches/Peek/Pages.m: the Peek search page used when the default search engine of Dia has no usable URL
         # template. It is only loaded when the user searches from Peek, with that tweak on.
         else if (url == "www.google.com/search") verdict = "ok (exception: Peek search fallback)"
+        # install.sh: offers to install Rust with rustup (the official installer) for the diatweaks command, only when
+        # run interactively without --yes and only if the user answers yes. rustup.rs is the help link it prints.
+        else if (file == "install.sh" && (url == "sh.rustup.rs" || url == "rustup.rs")) verdict = "ok (exception: install.sh rustup)"
+        # scripts/check-tweak-docs: a contributor check (not run by install.sh or the app) that clones the wiki to
+        # confirm each tweak has a page. Read-only, and it never runs anything from the clone.
+        else if (file == "scripts/check-tweak-docs" && url == "github.com/JaceThings/DiaTweaks.wiki.git") verdict = "ok (exception: wiki docs check)"
         key = verdict "\t" (verdict == "FAIL" ? url "  in " file : host)
         if (!(key in seen)) order[++n] = key
         seen[key]++
@@ -61,7 +68,7 @@ report=$(git grep -I --untracked -n -o -E 'https?://[A-Za-z0-9._~%:-]+(/[A-Za-z0
     END { for (i = 1; i <= n; i++) { split(order[i], k, "\t"); printf "%s\t%d\t%s\n", k[1], seen[order[i]], k[2] } }' | sort)
 printf '%s\n' "$report" | awk -F'\t' 'NF { printf "    %-45s %4d  %s\n", $1, $2, $3 }'
 if printf '%s\n' "$report" | grep -q '^FAIL'; then
-    fail "hosts outside diabrowser.com, releases.diabrowser.com, github.com/JaceThings/DiaTweaks/wiki and raw.githubusercontent.com/wiki/JaceThings/DiaTweaks (see FAIL above)"
+    fail "hosts outside the allowlist in FORK.md (see FAIL above)"
 fi
 
 [ "$failed" = 0 ] && echo "check-fork: ok"
