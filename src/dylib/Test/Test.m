@@ -4,12 +4,13 @@
 static const NSTimeInterval DPSettleSeconds = 1;
 
 static void DPWriteReport(NSArray<NSDictionary *> *results, NSString *path) {
+    DPTesting = NO;  // Dia carries on with the saved settings.
     NSMutableArray<NSString *> *unavailable = [NSMutableArray new];
-    for (NSUInteger i = 0; i < DPPatchCount; i++) if (DPPatches[i]->unavailable) [unavailable addObject:DPPatches[i]->key];
+    for (NSUInteger i = 0; i < DPPatchCount; i++) if (DPPatches[i]->unavailable && !DPPatches[i]->inDia) [unavailable addObject:DPPatches[i]->key];
     NSDictionary *info = NSBundle.mainBundle.infoDictionary;
     NSDictionary *report = @{
         @"dia": [NSString stringWithFormat:@"%@ (%@)", info[@"CFBundleShortVersionString"], info[@"CFBundleVersion"]],
-        @"layout": DPFindViews(DPDiaSidebarFooter).count ? @"sidebar" : @"top",
+        @"layout": DPTabLayout(),
         @"safeMode": @(DPSafeMode),
         @"unavailable": unavailable,
         @"scenarios": results,
@@ -28,6 +29,8 @@ static void DPRunScenario(NSArray<NSArray<NSString *> *> *scenarios, NSUInteger 
             DPPatch *patch = DPPatches[i];
             states[patch->key] = @(patch->on);
             NSString *problem = patch->verify && !patch->unavailable ? patch->verify(patch) : nil;
+            if (!problem && patch->on && patch->ready) problem = patch->ready(patch);
+            if (!problem && !patch->on && !patch->unavailable && [bits characterAtIndex:i] == '1') problem = @"couldn't turn on";
             if (problem) failures[patch->key] = problem;
         }
         [results addObject:@{@"name": scenarios[index][0], @"states": states, @"failures": failures}];
@@ -36,10 +39,11 @@ static void DPRunScenario(NSArray<NSArray<NSString *> *> *scenarios, NSUInteger 
 }
 
 void DPRunTests(NSString *path) {
+    DPTesting = YES;
     DPOnLaunch(^{
         __block int polls = 0;
         [NSTimer scheduledTimerWithTimeInterval:0.5 repeats:YES block:^(NSTimer *timer) {
-            // After a minute without a browser window it runs anyway, and the report says what's missing.
+            // After a minute without a browser window, run anyway so the report says what's missing.
             if (!DPFindViews(DPDiaContentPane).count && ++polls < 120) return;
             [timer invalidate];
             if (DPSafeMode) return DPWriteReport(@[], path);

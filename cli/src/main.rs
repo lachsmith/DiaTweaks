@@ -10,7 +10,6 @@ mod signals;
 mod status;
 mod tweaks;
 mod ui;
-mod update;
 mod update_dia;
 
 use std::{io, process::ExitCode};
@@ -50,8 +49,6 @@ enum Command {
     },
     /// Show Dia's versions, safe mode and which tweaks are on
     Status,
-    /// Install the latest DiaTweaks release, then patch Dia again
-    Update,
     /// Download and patch a newer Dia
     UpdateDia,
     /// Put the original Dia back
@@ -64,7 +61,6 @@ enum Command {
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
-    // The menu always asks: --yes is for scripted commands.
     let ui = Ui::new(cli.yes && cli.command.is_some());
     if cli.command.is_none() && !ui.interactive {
         let _ = Cli::command().write_help(&mut io::stderr());
@@ -103,7 +99,6 @@ fn run(command: Option<Command>, ui: &Ui) -> Result<()> {
         Command::Enable { tweaks } => tweaks::set(&env, ui, &tweaks, true),
         Command::Disable { tweaks } => tweaks::set(&env, ui, &tweaks, false),
         Command::Status => status::print(&env, ui),
-        Command::Update => update::run(&env, ui),
         Command::UpdateDia => update_dia::run(&env, ui),
         Command::Restore { purge } => restore::run(&env, ui, purge),
     }

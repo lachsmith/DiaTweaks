@@ -30,7 +30,6 @@ pub fn list(env: &Env) -> Result<()> {
     Ok(())
 }
 
-/// `diatweaks enable` and `disable`.
 pub fn set(env: &Env, ui: &Ui, names: &[String], on: bool) -> Result<()> {
     let manifest = Manifest::load(&env.manifest())?;
     let targets = manifest.resolve(names)?;
@@ -66,7 +65,6 @@ pub fn set(env: &Env, ui: &Ui, names: &[String], on: bool) -> Result<()> {
     Ok(())
 }
 
-/// The Tweaks screen of the menu.
 pub fn menu(env: &Env, ui: &Ui) -> Result<()> {
     let manifest = Manifest::load(&env.manifest())?;
     let current = manifest.state(&Prefs::new(&env.domain));
@@ -115,10 +113,7 @@ fn hint(manifest: &Manifest, current: &[bool], index: usize) -> String {
     if let Some(required) = manifest.requirement(index) {
         hint.push_str(&format!(" Needs {}.", manifest.title(required)));
     }
-    if let Some(disabler) = manifest
-        .disabler(index)
-        .filter(|&disabler| current[disabler])
-    {
+    if let Some(disabler) = manifest.hidden_by(index, current) {
         hint.push_str(&format!(
             " No difference while {} is on.",
             manifest.title(disabler)
@@ -127,7 +122,6 @@ fn hint(manifest: &Manifest, current: &[bool], index: usize) -> String {
     hint
 }
 
-/// Turning on a patch that needs another one offers to turn that on too.
 fn add_requirements(
     ui: &Ui,
     manifest: &Manifest,
@@ -158,7 +152,6 @@ fn add_requirements(
     Ok(())
 }
 
-/// What won't show the way the user might expect, for the patches this run touches.
 fn notes(manifest: &Manifest, current: &[bool], wanted: &[bool]) -> Vec<String> {
     let changed = |index: usize| current[index] != wanted[index];
     let mut notes = Vec::new();
@@ -172,8 +165,8 @@ fn notes(manifest: &Manifest, current: &[bool], wanted: &[bool]) -> Vec<String> 
                 ));
             }
         }
-        if let Some(disabler) = manifest.disabler(index) {
-            if changed(index) && wanted[disabler] {
+        if let Some(disabler) = manifest.hidden_by(index, wanted) {
+            if changed(index) {
                 notes.push(format!(
                     "{} makes no difference while {} is on.",
                     manifest.title(index),
@@ -185,8 +178,7 @@ fn notes(manifest: &Manifest, current: &[bool], wanted: &[bool]) -> Vec<String> 
     notes
 }
 
-/// Saves the patches whose wanted state differs from what this run started from, and leaves the
-/// rest alone in case something else changed them meanwhile. Returns what it changed.
+/// Writes only what this run changed, in case something else changed the rest meanwhile.
 fn save(env: &Env, manifest: &Manifest, current: &[bool], wanted: &[bool]) -> Result<Vec<usize>> {
     let changes: Vec<usize> = (0..wanted.len())
         .filter(|&index| current[index] != wanted[index])
