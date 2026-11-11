@@ -14,14 +14,14 @@ No branch is created or renamed to `main`, and nothing is committed to `my-versi
 - [x] 2. Merge upstream/main and resolve conflicts
 - [x] 3. Compare quarantine handling
 - [x] 4. Write scripts/check-fork and FORK.md (2 host findings await the user)
-- [ ] 5. Confirm defaultOn is NO for Passkeys, ICloudPasswords, OnePassword
+- [x] 5. Confirm defaultOn is NO for Passkeys, ICloudPasswords, OnePassword
 - [ ] 6. make, make test
 - [ ] 7. Summary, then install on approval, diapatch status
 - [ ] 8. Push and open PR into my-version on approval
 
 ## Current state / next action
 
-Step 4 done, but `scripts/check-fork` currently FAILS on two upstream URLs (Home.m GitHub/issues links, Peek's Google fallback). Waiting for the user's decision; until then, `install.sh` stops before building. Next: step 5 (read-only defaultOn check), then step 6 (make, make test).
+Step 5 done. Next: step 6, `make` then `make test` on `sync-upstream`. Still open from step 4: the user's decision on the two check-fork host findings (install.sh stops until then).
 
 ## Step log
 
@@ -112,3 +112,18 @@ check-fork: hosts outside diabrowser.com, releases.diabrowser.com, github.com/Ja
 **For the user to decide.** Both are upstream code, and neither is release code:
 1. `src/dylib/Settings/Home.m`: the "GitHub" and "Report a Bug" rows open `https://github.com/JaceThings/DiaTweaks` and `/issues/new/choose` in the browser (the "Wiki" row is allowed). Options: allow these two links in check-fork, or point them at the fork, or drop the two rows.
 2. `src/dylib/Patches/Peek/Pages.m:74`: the Peek tweak falls back to `https://www.google.com/search?q=…` when Dia's default search engine has no usable template. This is upstream tweak code, so per the plan it's not edited without asking. Options: allow `www.google.com/search` in check-fork, or change Peek's fallback.
+
+### Step 5: done (2026-11-11)
+
+Ran: read-only review of `src/dylib/Patches/{Passkeys,ICloudPasswords,OnePassword}/*.m`, `src/dylib/StdPatch/Patch.m`, `src/diapatch/{Passkeys,PasswordsLaunch,PasswordsHost}.m` and `src/diapatch/main.m`. No code changed.
+
+`defaultOn`: none of the three `DP_PATCH` initializers sets `.defaultOn`, so the field is zero (NO). `DPPatch.on` is the saved value, or else `defaultOn` (`Patch.m:102`). Keys: `passkeys` (order 100), `icloudPasswords` (101), `onePassword` (102), all in the Passwords section and marked Experimental. Behaviour unchanged.
+
+Where they write when turned on:
+- **Passkeys:** `~/Library/Application Support/DiaPatches/passkeys-extension/` (`manifest.json`, `page.js`, `bridge.js`, `worker.js`, extracted from the dylib) and `~/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.diapatches.passkeys.json` (points at `DiaPatches/bin/diapatch`). While running, diapatch copies Dia's `global_key_value_store.db*` from `~/Library/Application Support/Dia/User Data` into the helper Dia's own profile.
+- **iCloud Passwords:** Chrome `NativeMessagingHosts/com.apple.passwordmanager.json` and `io.github.fanckush.betterpasswords.bridge.json`, both pointing at diapatch. If another app's manifest is there and points at Apple's helper, it's moved to `DiaPatches/<name>.json` and put back when the tweak is turned off. diapatch clones the original Dia into `/Applications/.DiaTweaks/Dia.app` (Apple's helper only trusts browsers under /Applications) and uses `DiaPatches/passwords-launch/<pid>` (mode 0700).
+- **1Password:** writes no manifest of its own (it needs 1Password's `com.1password.1password.json` there). It interposes `posix_spawn` so 1Password's helper starts through diapatch, which uses `passwords-launch/` and, if needed, the `/Applications/.DiaTweaks` clone.
+
+When off: on launch, Passkeys deletes its extension folder and manifest, and iCloud Passwords removes only manifests that point at diapatch (restoring any it moved aside). It also kills any leftover original-Dia helper processes.
+
+For the user to look at: `diapatch install` (run by install.sh) always calls `removeRelay()`. That runs `launchctl bootout gui/<uid>/com.diapatches.passwords` and deletes `~/Library/LaunchAgents/com.diapatches.passwords.plist`, `/Applications/.DiaTweaks` and the relay sockets **if they exist** (left by an older 1Password relay). These paths are outside the plan's allowed set, but only DiaTweaks' own leftovers get deleted.
